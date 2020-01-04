@@ -43,11 +43,20 @@ int FreepieMoveClient::run(
 			trackedHmdIDs = hmdDeviceIDs;
 			trackedHmdCount = hmdDeviceCount;
 		}
-		
+		else
+			trackedHmdCount = 0;
+
 		if (contDeviceCount > 0)
 		{
 			trackedControllerIDs = contDeviceIDs;
 			trackedControllerCount = contDeviceCount;
+		}
+		else
+			trackedControllerCount = 0;
+
+		if (trackedHmdCount == 0 && trackedControllerCount == 0) {
+			std::cout << "Nothing to track. Exiting program" << std::endl;
+			return 0;
 		}
 
 		trackedFreepieIndices = freepieIndices;
