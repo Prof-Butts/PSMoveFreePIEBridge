@@ -2,8 +2,7 @@
 #include "FreepieMoveClient.h"
 #include <stdarg.h>
 
-extern int g_iFreePIESlotOut;
-extern int g_iFreePIESlotIn;
+extern int g_iHMDFreePIESlotIn, g_iHMDFreePIESlotOut, g_iContFreePIESlotOut;
 extern float g_fMultiplier;
 extern bool g_bDebug;
 
@@ -39,60 +38,61 @@ void log_debug(const char *format, ...)
 	va_end(args);
 }
 
-void prompt_arguments(eDeviceType &deviceType, int32_t &deviceCount, int* deviceIDs, PSMTrackingColorType* bulbColors, int32_t &triggerAxis) {
-	int rawDeviceType = 1;
+void prompt_arguments(int32_t &hmdDeviceCount, int32_t &contDeviceCount,
+	int* hmdDeviceIDs, int* contDeviceIDs,
+	PSMTrackingColorType* bulbColors, // PSMTrackingColorType* contBulbColors,
+	int32_t &contTriggerAxis)
+{
+	int hmdDeviceID = 0, contDeviceID = 0;
 	// In this version we only care about tracking the HMD:
-	deviceType  = _deviceTypeHMD;
-	deviceCount = 1;
+	//deviceType  = _deviceTypeHMD;
+	//deviceCount = 1;
 
 	std::cout << "PSMove FreePIE Bridge LITE" << std::endl;
 	int deviceID = 0;
 
-	std::cout << "1) HMD " << std::endl;
-	std::cout << "2) Controllers " << std::endl;
-	std::cout << "Which device type do you want to track: ";
-	std::cin >> rawDeviceType;
+	//std::cout << "Please specify how many of the following will be tracked:" << endl;
+	//std::cout << "Number of HMDs: ";
+	//std::cin >> hmdDeviceCount;
+	hmdDeviceCount = 1;
+	contDeviceCount = 1;
 
-	if (rawDeviceType == (int)_deviceTypeHMD)
-	{
-		deviceType = _deviceTypeHMD;
-		deviceCount = 1;
-	}
-	else
-	{
-		deviceType = _deviceTypeController;
-		deviceCount = 1;
+	std::cout << "Enter the ID of the HMD device (-1 disables this option): ";
+	std::cin >> hmdDeviceID;
+	hmdDeviceIDs[0] = hmdDeviceID;
+	hmdDeviceCount = hmdDeviceID > -1 ? 1 : 0;
 
-		//std::cout << "How many controllers do you want to track (1-4)? Note that more than 1 disables raw sensor data access and 4 disables button access: ";
-		//std::cin >> deviceCount;
-	}
-
-	std::cout << "Enter the ID of the device: ";
-	std::cin >> deviceID;
+	//std::cout << "Number of controllers (1-4). Note that more than 1 disables raw sensor data access and 4 disables button access: ";
+	//std::cin >> contDeviceCount;
+	std::cout << "Enter the ID of the Controller (-1 disables this option): ";
+	std::cin >> contDeviceID;	
+	contDeviceIDs[0] = contDeviceID;
+	contDeviceCount = contDeviceID > -1 ? 1 : 0;
 
 	PSMTrackingColorType bulbColor = PSMTrackingColorType_MaxColorTypes;
-
-	deviceIDs[0] = deviceID;
 	bulbColors[0] = bulbColor;
 
 	// For HMDs we'll read yaw/pitch/roll from the input FreePIE slot and write combined 6dof to the output slot
-	if (deviceType == _deviceTypeHMD) 
+	if (hmdDeviceCount > 0) 
 	{
-		std::cout << "Enter the FreePIE input slot (to read yaw/pitch/roll): ";
-		std::cin >> g_iFreePIESlotIn;
+		std::cout << "Enter the HMD FreePIE input slot to read yaw/pitch/roll for the HMD: ";
+		std::cin >> g_iHMDFreePIESlotIn;
+
+		std::cout << "Enter the HMD FreePIE output slot: ";
+		std::cin >> g_iHMDFreePIESlotOut;
 	}
-	// For Controllers, we won't read yaw/pitch/roll, just output positional data to the output slot
-	std::cout << "Enter the FreePIE output slot: ";
-	std::cin >> g_iFreePIESlotOut;
+
+	if (contDeviceCount > 0) {
+		// For Controllers, we won't read yaw/pitch/roll, just output positional data to the output slot
+		std::cout << "Enter the Controller FreePIE output slot: ";
+		std::cin >> g_iContFreePIESlotOut;
+
+		std::cout << "For virtual controllers, which axis corresponds to the trigger (-1 for default): ";
+		std::cin >> contTriggerAxis;
+	}
 
 	//std::cout << "Enter the mutiplier: ";
 	//std::cin >> g_fMultiplier;
-
-	if (deviceType == _deviceTypeController)
-	{
-		std::cout << "For virtual controllers, which axis corresponds to the trigger (-1 for default): ";
-		std::cin >> triggerAxis;
-	}
 
 	std::cout << "Debug Mode (1 = true, 0 = false): ";
 	std::cin >> g_bDebug;
@@ -213,11 +213,11 @@ bool parse_arguments(
 
 int main(int argc, char** argv)
 {
-	eDeviceType deviceType= _deviceTypeController;
-	int32_t deviceCount = 0;
-	int deviceIDs[4];
+	//eDeviceType deviceType = _deviceTypeController;
+	int32_t hmdDeviceCount = 0, contDeviceCount;
+	int hmdDeviceIDs[4], contDeviceIDs[4];
 	int32_t freepieIndices[4] = { 0, 1, 2, 3 };
-    int32_t triggerAxis= -1;
+    int32_t contTriggerAxis = -1;
 	PSMTrackingColorType bulbColors[4] = { 
 		PSMTrackingColorType_MaxColorTypes, PSMTrackingColorType_MaxColorTypes, 
 		PSMTrackingColorType_MaxColorTypes, PSMTrackingColorType_MaxColorTypes 
@@ -225,19 +225,26 @@ int main(int argc, char** argv)
 	bool bRun = true;
 	bool bExitWithPSMoveService = false;
 
-	if (argc == 1) {
-		prompt_arguments(deviceType, deviceCount, deviceIDs, bulbColors, triggerAxis);
-	}
+	//if (argc == 1) {
+		//prompt_arguments(deviceType, deviceCount, deviceIDs, bulbColors, triggerAxis);
+		prompt_arguments(hmdDeviceCount, contDeviceCount, hmdDeviceIDs, contDeviceIDs,
+			bulbColors, contTriggerAxis);
+	/*}
 	else {
 		if (!parse_arguments(argc, argv, deviceType, deviceCount, deviceIDs, bulbColors, triggerAxis, bExitWithPSMoveService)) {
 			std::cout << "Command line arguments are not valid." << std::endl;
 			bRun = false;;
 		}
-	}
+	}*/
 
 	if (bRun) {
 		FreepieMoveClient* client = new FreepieMoveClient();
-		client->run(deviceType, deviceCount, deviceIDs, bulbColors, freepieIndices, deviceCount < 2, triggerAxis);
+		//client->run(deviceType, deviceCount, deviceIDs, bulbColors, freepieIndices, deviceCount < 2, triggerAxis);
+		client->run(hmdDeviceCount, contDeviceCount,
+			hmdDeviceIDs, contDeviceIDs,
+			bulbColors, // contBulbColors,
+			freepieIndices, contDeviceCount < 2, 
+			contTriggerAxis);
 	}
 
 	std::cout << "PSMoveFreepieBridge has ended" << std::endl;

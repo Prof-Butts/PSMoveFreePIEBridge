@@ -17,6 +17,7 @@ public:
 	FreepieMoveClient();
 	~FreepieMoveClient();
 
+	/*
 	int run(
         eDeviceType deviceType, 
         int32_t deviceCount, 
@@ -25,8 +26,19 @@ public:
         int32_t freepieIndicies[], 
         bool sendSensorData = true,
         int triggerAxisIndex = -1);
+	*/
+
+	int run(
+		int32_t hmdDeviceCount, int32_t contDeviceCount,
+		int32_t hmdDeviceIDs[], int32_t contDeviceIDs[],
+		PSMTrackingColorType bulbColors[], // PSMTrackingColorType contBulbColors[],
+		int32_t freepieIndices[],
+		bool sendSensorData = true,
+		int triggerAxisIndex = -1);
 
 	void handle_client_psmove_event(PSMEventMessage::eEventType event_type);
+
+	void handle_acquire_any(PSMResult resultCode, PSMHmdID trackedHmdIndex);
 
 	void handle_acquire_hmd(PSMResult resultCode, PSMHmdID trackedHmdIndex);
     void handle_acquire_controller(PSMResult resultCode, PSMControllerID trackedControllerIndex);
@@ -39,7 +51,7 @@ public:
 
 private:
 	bool m_keepRunning = true;
-    eDeviceType m_device_type;
+    //eDeviceType m_device_type;
     PSMHeadMountedDisplay *hmd_views[4] = { nullptr, nullptr, nullptr, nullptr };
 	PSMController *controller_views[4] = { nullptr, nullptr, nullptr, nullptr };
 	std::chrono::milliseconds last_report_fps_timestamp;

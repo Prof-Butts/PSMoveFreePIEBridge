@@ -15,50 +15,11 @@
 #include <stdio.h>
 #include "FreePIE.h"
 
-int g_iFreePIESlotIn = 0;
-int g_iFreePIESlotOut = 1;
+int   g_iHMDFreePIESlotIn = 0;
+int   g_iHMDFreePIESlotOut = 1;
+int   g_iContFreePIESlotOut = 2;
 float g_fMultiplier = 1.0f;
-bool g_bDebug = false;
-
-float x_s[100];
-float y_s[100];
-float z_s[100];
-int max_mean_idx = 1;
-int mean_idx = 0;
-float num_pos = 0;
-
-// Average the lasts max_mean_idx measurements (adds lag, but removes some noise)
-/*
-void add_pos(float x, float y, float z, float *x_out, float *y_out, float *z_out) {
-	if (num_pos < max_mean_idx) {
-		*x_out = x;
-		*y_out = y;
-		*z_out = z;
-		x_s[mean_idx] = x;
-		y_s[mean_idx] = y;
-		z_s[mean_idx] = z;
-		mean_idx++;
-		num_pos++;
-		return;
-	}
-	mean_idx = (mean_idx + 1) % max_mean_idx;
-	x_s[mean_idx] = x;
-	y_s[mean_idx] = y;
-	z_s[mean_idx] = z;
-	// Compute the mean
-	*x_out = 0;
-	*y_out = 0;
-	*z_out = 0;
-	for (register int i = 0; i < num_pos; i++) {
-		*x_out += x_s[i];
-		*y_out += y_s[i];
-		*z_out += z_s[i];
-	}
-	*x_out /= num_pos;
-	*y_out /= num_pos;
-	*z_out /= num_pos;
-}
-*/
+bool  g_bDebug = false;
 
 FreepieMoveClient::FreepieMoveClient()
 {
@@ -66,10 +27,10 @@ FreepieMoveClient::FreepieMoveClient()
 }
 
 int FreepieMoveClient::run(
-    eDeviceType deviceType, 
-    int32_t deviceCount, 
-    int32_t deviceIDs[], 
-    PSMTrackingColorType bulbColors[], 
+    //eDeviceType deviceType, 
+    int32_t hmdDeviceCount, int32_t contDeviceCount,
+    int32_t hmdDeviceIDs[], int32_t contDeviceIDs[],
+    PSMTrackingColorType bulbColors[], // PSMTrackingColorType contBulbColors[],
     int32_t freepieIndices[], 
     bool sendSensorData, 
     int triggerAxisIndex)
@@ -77,17 +38,16 @@ int FreepieMoveClient::run(
 	// Attempt to start and run the client
 	try
 	{
-		m_device_type = deviceType;
-
-		if (deviceType == _deviceTypeHMD)
+		if (hmdDeviceCount > 0)
 		{
-			trackedHmdIDs = deviceIDs;
-			trackedHmdCount = deviceCount;
+			trackedHmdIDs = hmdDeviceIDs;
+			trackedHmdCount = hmdDeviceCount;
 		}
-		else
+		
+		if (contDeviceCount > 0)
 		{
-			trackedControllerIDs = deviceIDs;
-			trackedControllerCount = deviceCount;
+			trackedControllerIDs = contDeviceIDs;
+			trackedControllerCount = contDeviceCount;
 		}
 
 		trackedFreepieIndices = freepieIndices;
@@ -133,11 +93,12 @@ void FreepieMoveClient::handle_client_psmove_event(PSMEventMessage::eEventType e
 	{
 	case PSMEventMessage::PSMEvent_connectedToService:
 		std::cout << "FreepieMoveClient - Connected to service" << std::endl;
-		if (m_device_type == _deviceTypeHMD)
+		if (trackedHmdCount > 0)
 		{
 			init_hmd_views();
 		}
-		else
+
+		if (trackedControllerCount > 0)
 		{
 			init_controller_views();
 		}
@@ -154,7 +115,7 @@ void FreepieMoveClient::handle_client_psmove_event(PSMEventMessage::eEventType e
 		std::cout << "FreepieMoveClient - Opaque service event(%d). Ignored." << static_cast<int>(event_type) << std::endl;
 		break;
 	case PSMEventMessage::PSMEvent_controllerListUpdated:
-		if (m_device_type == _deviceTypeController)
+		if (trackedControllerCount > 0)
 		{
 			std::cout << "FreepieMoveClient - Controller list updated. Reinitializing controller views." << std::endl;
 			free_controller_views();
@@ -169,7 +130,7 @@ void FreepieMoveClient::handle_client_psmove_event(PSMEventMessage::eEventType e
 		std::cout << "FreepieMoveClient - Tracker list updated. Ignored." << std::endl;
 		break;
 	case PSMEventMessage::PSMEvent_hmdListUpdated:        
-		if (m_device_type == _deviceTypeHMD)
+		if (trackedHmdCount > 0)
 		{
 			std::cout << "FreepieMoveClient - HMD list updated. Reinitializing HMD views." << std::endl;
 			free_hmd_views();
@@ -186,6 +147,19 @@ void FreepieMoveClient::handle_client_psmove_event(PSMEventMessage::eEventType e
 	default:
 		std::cout << "FreepieMoveClient - unhandled event(%d)" << static_cast<int>(event_type) << std::endl;
 		break;
+	}
+}
+
+void FreepieMoveClient::handle_acquire_any(PSMResult resultCode, PSMHmdID index)
+{
+	if (resultCode == PSMResult_Success)
+	{
+		std::cout << "FreepieMoveClient - Acquired HMD or Controller: " << index << std::endl;
+	}
+	else
+	{
+		std::cout << "FreepieMoveClient - Failed to acquire HMD or Controller: " << index << std::endl;
+		//m_keepRunning = false;
 	}
 }
 
@@ -243,6 +217,7 @@ bool FreepieMoveClient::startup()
 
 void FreepieMoveClient::update()
 {
+	int trackedDeviceCount = trackedHmdCount + trackedControllerCount;
 	// Process incoming/outgoing networking requests
 	PSM_UpdateNoPollMessages();
 
@@ -254,13 +229,13 @@ void FreepieMoveClient::update()
 		{
 		case PSMMessage::_messagePayloadType_Response:
             {
-                int trackedDeviceCount = (m_device_type == _deviceTypeHMD) ? trackedHmdCount : trackedControllerCount;
-
+                //int trackedDeviceCount = (trackedHmdCount > 0) ? trackedHmdCount : trackedControllerCount;
 			    for (int i = 0; i < trackedDeviceCount; i++)
 			    {
 				    if (start_stream_request_ids[i] != -1 &&
 					    message.response_data.request_id == start_stream_request_ids[i])
 				    {
+						/*
 					    if (m_device_type == _deviceTypeHMD)
 					    {
 						    handle_acquire_hmd(message.response_data.result_code, i);
@@ -269,6 +244,8 @@ void FreepieMoveClient::update()
 					    {
 						    handle_acquire_controller(message.response_data.result_code, i);
 					    }
+						*/
+						handle_acquire_any(message.response_data.result_code, i);
 					    start_stream_request_ids[i] = -1;
 				    }
 			    }
@@ -280,24 +257,16 @@ void FreepieMoveClient::update()
 		}
 	}
 
-	if (m_device_type == _deviceTypeHMD)
-	{
+	//if (m_device_type == _deviceTypeHMD)
 		for (int i = 0; i < trackedHmdCount; i++)
 		{
 			if (hmd_views[i] && hmd_views[i]->bValid)
 			{
-				std::chrono::milliseconds now =
-					std::chrono::duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch());
-				std::chrono::milliseconds diff = now - last_report_fps_timestamp;
-
 				PSMPosef hmdPose;
 				if (PSM_GetHmdPose(hmd_views[i]->HmdID, &hmdPose) == PSMResult_Success)
 				{
-					//freepie_io_6dof_data poseData;
-
 					// Read yaw, pitch, roll from the g_iFreePIESlotIn slot:
-					ReadFreePIE(g_iFreePIESlotIn);
+					ReadFreePIE(g_iHMDFreePIESlotIn);
 
 					// Add the positional information:
 					// Data seems to be in cms, let's scale down to meters:
@@ -306,38 +275,31 @@ void FreepieMoveClient::update()
 					g_FreePIEData.z = g_fMultiplier * hmdPose.Position.z / 100.0f;
 
 					if (g_bDebug)
-						printf("HMD w[%d]: (%0.4f, %0.4f, %0.4f)\n", g_iFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
+						printf("HMD[%d] out slot: %d, (%0.4f, %0.4f, %0.4f)\n", i, g_iHMDFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
 					// Write everything to slot g_iFreePIESlotOut:
-					WriteFreePIE(g_iFreePIESlotOut);
+					WriteFreePIE(g_iHMDFreePIESlotOut);
 				}
 			}
 		}
-	}
 
-	if (m_device_type == _deviceTypeController)
-	{
+	//if (m_device_type == _deviceTypeController)
 		for (int i = 0; i < trackedControllerCount; i++) 
 		{
 			if (controller_views[i] && controller_views[i]->bValid) {
-				std::chrono::milliseconds now =
-					std::chrono::duration_cast<std::chrono::milliseconds>(
-						std::chrono::system_clock::now().time_since_epoch());
-				std::chrono::milliseconds diff = now - last_report_fps_timestamp;
-
 				PSMPosef contPose;
 				if (PSM_GetControllerPose(controller_views[i]->ControllerID, &contPose) == PSMResult_Success)
 				{
 					g_FreePIEData.x = g_fMultiplier * contPose.Position.x / 100.0f;
 					g_FreePIEData.y = g_fMultiplier * contPose.Position.y / 100.0f;
 					g_FreePIEData.z = g_fMultiplier * contPose.Position.z / 100.0f;
+
 					if (g_bDebug) 
-						printf("Cont w[%d]: (%0.4f, %0.4f, %0.4f)\n", g_iFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
+						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f)\n", i, g_iContFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
 					// Write the pose to slot g_iFreePIESlotOut:
-					WriteFreePIE(g_iFreePIESlotOut);
+					WriteFreePIE(g_iContFreePIESlotOut);
 				}
 			}
 		}
-	}
 }
 
 void FreepieMoveClient::shutdown()
