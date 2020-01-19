@@ -302,8 +302,23 @@ void FreepieMoveClient::update()
 					g_FreePIEData.y = g_fMultiplier * contPose.Position.y / 100.0f;
 					g_FreePIEData.z = g_fMultiplier * contPose.Position.z / 100.0f;
 
+					// Retrieve button state
+					uint32_t buttonsPressed = 0;
+					const PSMVirtualController &controllerView = controller_views[i]->ControllerState.VirtualController;
+					int buttonCount = (controllerView.numButtons < 16) ? controllerView.numButtons : 16;
+
+					for (int buttonIndex = 0; buttonIndex < buttonCount; ++buttonIndex)
+					{
+						int bit = (controllerView.buttonStates[buttonIndex] == PSMButtonState_DOWN || 
+							controllerView.buttonStates[buttonIndex] == PSMButtonState_PRESSED) ? 1 : 0;
+						buttonsPressed |= (bit << buttonIndex);
+					}
+					*((uint32_t *)&(g_FreePIEData.yaw)) = buttonsPressed;
+
 					if (g_bDebug) 
-						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f)\n", i, g_iContFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
+						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f), 0x%X\n", 
+							i, g_iContFreePIESlotOut, 
+							g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z, buttonsPressed);
 					// Write the pose to slot g_iFreePIESlotOut:
 					WriteFreePIE(g_iContFreePIESlotOut);
 				}
