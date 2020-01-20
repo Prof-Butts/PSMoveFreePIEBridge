@@ -87,8 +87,9 @@ void prompt_arguments(int32_t &hmdDeviceCount, int32_t &contDeviceCount,
 		std::cout << "Enter the Controller FreePIE output slot: ";
 		std::cin >> g_iContFreePIESlotOut;
 
-		std::cout << "For virtual controllers, which axis corresponds to the trigger (-1 for default): ";
-		std::cin >> contTriggerAxis;
+		//std::cout << "For virtual controllers, which axis corresponds to the trigger (-1 for default): ";
+		//std::cin >> contTriggerAxis;
+		contTriggerAxis = -1;
 	}
 
 	//std::cout << "Enter the mutiplier: ";
