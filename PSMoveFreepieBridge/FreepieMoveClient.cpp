@@ -314,11 +314,15 @@ void FreepieMoveClient::update()
 						buttonsPressed |= (bit << buttonIndex);
 					}
 					*((uint32_t *)&(g_FreePIEData.yaw)) = buttonsPressed;
+					// Send the axis data on the pitch/roll slots
+					*((uint32_t *)&(g_FreePIEData.pitch)) = controllerView.axisStates[0];
+					*((uint32_t *)&(g_FreePIEData.roll)) = controllerView.axisStates[1];
 
 					if (g_bDebug) 
-						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f), 0x%X\n", 
+						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f), axis0: %d, axis1: %d, 0x%X\n", 
 							i, g_iContFreePIESlotOut, 
-							g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z, buttonsPressed);
+							g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z,
+							controllerView.axisStates[0], controllerView.axisStates[1], 	buttonsPressed);
 					// Write the pose to slot g_iFreePIESlotOut:
 					WriteFreePIE(g_iContFreePIESlotOut);
 				}
