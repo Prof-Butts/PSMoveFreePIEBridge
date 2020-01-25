@@ -15,7 +15,7 @@ freepie_io_6dof_read_fun_type freepie_io_6dof_read = NULL;
 freepie_io_6dof_write_fun_type freepie_io_6dof_write = NULL;
 
 bool g_bFreePIELoaded = false, g_bFreePIEInitialized = false;
-freepie_io_6dof_data g_FreePIEData;
+freepie_io_6dof_data g_HMDFreePIEData, g_ContFreePIEData;
 HMODULE hFreePIE = NULL;
 
 bool InitFreePIE() {
@@ -73,9 +73,9 @@ void ShutdownFreePIE() {
 		FreeLibrary(hFreePIE);
 }
 
-bool ReadFreePIE(int slot) {
+bool ReadFreePIE(int slot, freepie_io_6dof_data *FreePIEData) {
 	// Check how many slots (values) the current FreePIE implementation provides.
-	int error = freepie_io_6dof_read(slot, 1, &g_FreePIEData);
+	int error = freepie_io_6dof_read(slot, 1, FreePIEData);
 	if (error < 0) {
 		log_debug("FreePIE error: %d", error);
 		return false;
@@ -83,8 +83,8 @@ bool ReadFreePIE(int slot) {
 	return true;
 }
 
-void WriteFreePIE(int slot) {
-	int error = freepie_io_6dof_write(slot, 1, &g_FreePIEData);
+void WriteFreePIE(int slot, freepie_io_6dof_data *FreePIEData) {
+	int error = freepie_io_6dof_write(slot, 1, FreePIEData);
 	if (error != 0)
 		log_debug("Could not write to FreePIE, error: 0x%x", error);
 }

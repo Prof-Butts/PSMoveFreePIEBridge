@@ -55,7 +55,8 @@ private:
     PSMHeadMountedDisplay *hmd_views[4] = { nullptr, nullptr, nullptr, nullptr };
 	PSMController *controller_views[4] = { nullptr, nullptr, nullptr, nullptr };
 	std::chrono::milliseconds last_report_fps_timestamp;
-	PSMRequestID start_stream_request_ids[4] = { -1, -1, -1, -1 };
+	PSMRequestID hmd_start_stream_request_ids[4] = { -1, -1, -1, -1 };
+	PSMRequestID cont_start_stream_request_ids[4] = { -1, -1, -1, -1 };
 	PSMControllerID* trackedControllerIDs;
     PSMHmdID* trackedHmdIDs;
 	int32_t* trackedFreepieIndices;

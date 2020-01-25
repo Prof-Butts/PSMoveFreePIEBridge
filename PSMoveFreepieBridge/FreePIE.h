@@ -22,9 +22,9 @@ const INT32 FREEPIE_IO_ERROR_SHARED_DATA = -1;
 const INT32 FREEPIE_IO_ERROR_OUT_OF_BOUNDS = -2;
 
 // readFreePIE() puts the information in this structure:
-extern freepie_io_6dof_data g_FreePIEData;
+extern freepie_io_6dof_data g_HMDFreePIEData, g_ContFreePIEData;
 
 bool InitFreePIE();
 void ShutdownFreePIE();
-bool ReadFreePIE(int slot);
-void WriteFreePIE(int slot);
+bool ReadFreePIE(int slot, freepie_io_6dof_data *FreePIEData);
+void WriteFreePIE(int slot, freepie_io_6dof_data *FreePIEData);

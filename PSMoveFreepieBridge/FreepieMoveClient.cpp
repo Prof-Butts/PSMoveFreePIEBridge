@@ -239,10 +239,11 @@ void FreepieMoveClient::update()
 		case PSMMessage::_messagePayloadType_Response:
             {
                 //int trackedDeviceCount = (trackedHmdCount > 0) ? trackedHmdCount : trackedControllerCount;
-			    for (int i = 0; i < trackedDeviceCount; i++)
+			    //for (int i = 0; i < trackedDeviceCount; i++)
+				for (int i = 0; i < trackedHmdCount; i++)
 			    {
-				    if (start_stream_request_ids[i] != -1 &&
-					    message.response_data.request_id == start_stream_request_ids[i])
+				    if (hmd_start_stream_request_ids[i] != -1 &&
+					    message.response_data.request_id == hmd_start_stream_request_ids[i])
 				    {
 						/*
 					    if (m_device_type == _deviceTypeHMD)
@@ -254,10 +255,30 @@ void FreepieMoveClient::update()
 						    handle_acquire_controller(message.response_data.result_code, i);
 					    }
 						*/
-						handle_acquire_any(message.response_data.result_code, i);
-					    start_stream_request_ids[i] = -1;
+						handle_acquire_hmd(message.response_data.result_code, i);
+					    hmd_start_stream_request_ids[i] = -1;
 				    }
 			    }
+
+				for (int i = 0; i < trackedControllerCount; i++)
+				{
+					if (cont_start_stream_request_ids[i] != -1 &&
+						message.response_data.request_id == cont_start_stream_request_ids[i])
+					{
+						/*
+						if (m_device_type == _deviceTypeHMD)
+						{
+							handle_acquire_hmd(message.response_data.result_code, i);
+						}
+						else
+						{
+							handle_acquire_controller(message.response_data.result_code, i);
+						}
+						*/
+						handle_acquire_controller(message.response_data.result_code, i);
+						cont_start_stream_request_ids[i] = -1;
+					}
+				}
             }
 			break;
 		case PSMMessage::_messagePayloadType_Event:
@@ -275,18 +296,18 @@ void FreepieMoveClient::update()
 				if (PSM_GetHmdPose(hmd_views[i]->HmdID, &hmdPose) == PSMResult_Success)
 				{
 					// Read yaw, pitch, roll from the g_iFreePIESlotIn slot:
-					ReadFreePIE(g_iHMDFreePIESlotIn);
+					ReadFreePIE(g_iHMDFreePIESlotIn, &g_HMDFreePIEData);
 
 					// Add the positional information:
 					// Data seems to be in cms, let's scale down to meters:
-					g_FreePIEData.x = g_fMultiplier * hmdPose.Position.x / 100.0f;
-					g_FreePIEData.y = g_fMultiplier * hmdPose.Position.y / 100.0f;
-					g_FreePIEData.z = g_fMultiplier * hmdPose.Position.z / 100.0f;
+					g_HMDFreePIEData.x = g_fMultiplier * hmdPose.Position.x / 100.0f;
+					g_HMDFreePIEData.y = g_fMultiplier * hmdPose.Position.y / 100.0f;
+					g_HMDFreePIEData.z = g_fMultiplier * hmdPose.Position.z / 100.0f;
 
 					if (g_bDebug)
-						printf("HMD[%d] out slot: %d, (%0.4f, %0.4f, %0.4f)\n", i, g_iHMDFreePIESlotOut, g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z);
+						printf("HMD[%d] out slot: %d, (%0.4f, %0.4f, %0.4f)\n", i, g_iHMDFreePIESlotOut, g_HMDFreePIEData.x, g_HMDFreePIEData.y, g_HMDFreePIEData.z);
 					// Write everything to slot g_iFreePIESlotOut:
-					WriteFreePIE(g_iHMDFreePIESlotOut);
+					WriteFreePIE(g_iHMDFreePIESlotOut, &g_HMDFreePIEData);
 				}
 			}
 		}
@@ -298,9 +319,9 @@ void FreepieMoveClient::update()
 				PSMPosef contPose;
 				if (PSM_GetControllerPose(controller_views[i]->ControllerID, &contPose) == PSMResult_Success)
 				{
-					g_FreePIEData.x = g_fMultiplier * contPose.Position.x / 100.0f;
-					g_FreePIEData.y = g_fMultiplier * contPose.Position.y / 100.0f;
-					g_FreePIEData.z = g_fMultiplier * contPose.Position.z / 100.0f;
+					g_ContFreePIEData.x = g_fMultiplier * contPose.Position.x / 100.0f;
+					g_ContFreePIEData.y = g_fMultiplier * contPose.Position.y / 100.0f;
+					g_ContFreePIEData.z = g_fMultiplier * contPose.Position.z / 100.0f;
 
 					// Retrieve button state
 					uint32_t buttonsPressed = 0;
@@ -313,18 +334,18 @@ void FreepieMoveClient::update()
 							controllerView.buttonStates[buttonIndex] == PSMButtonState_PRESSED) ? 1 : 0;
 						buttonsPressed |= (bit << buttonIndex);
 					}
-					*((uint32_t *)&(g_FreePIEData.yaw)) = buttonsPressed;
+					*((uint32_t *)&(g_ContFreePIEData.yaw)) = buttonsPressed;
 					// Send the axis data on the pitch/roll slots
-					*((uint32_t *)&(g_FreePIEData.pitch)) = controllerView.axisStates[0];
-					*((uint32_t *)&(g_FreePIEData.roll)) = controllerView.axisStates[1];
+					*((uint32_t *)&(g_ContFreePIEData.pitch)) = controllerView.axisStates[0];
+					*((uint32_t *)&(g_ContFreePIEData.roll)) = controllerView.axisStates[1];
 
 					if (g_bDebug) 
 						printf("Cont[%d] out slot: %d, (%0.4f, %0.4f, %0.4f), axis0: %d, axis1: %d, 0x%X\n", 
 							i, g_iContFreePIESlotOut, 
-							g_FreePIEData.x, g_FreePIEData.y, g_FreePIEData.z,
+							g_ContFreePIEData.x, g_ContFreePIEData.y, g_ContFreePIEData.z,
 							controllerView.axisStates[0], controllerView.axisStates[1], 	buttonsPressed);
 					// Write the pose to slot g_iFreePIESlotOut:
-					WriteFreePIE(g_iContFreePIESlotOut);
+					WriteFreePIE(g_iContFreePIESlotOut, &g_ContFreePIEData);
 				}
 			}
 		}
@@ -357,7 +378,7 @@ void FreepieMoveClient::init_controller_views() {
 		PSM_StartControllerDataStreamAsync(
 			controller_views[i]->ControllerID, 
 			m_sendSensorData ? PSMStreamFlags_includePositionData | PSMStreamFlags_includeCalibratedSensorData : PSMStreamFlags_includePositionData,
-			&start_stream_request_ids[i]);
+			&cont_start_stream_request_ids[i]);
 
 		//Set bulb color if specified
 		if ((trackedBulbColors[i] >= 0) && (trackedBulbColors[i] < PSMTrackingColorType_MaxColorTypes)) {
@@ -400,7 +421,7 @@ void FreepieMoveClient::init_hmd_views() {
 			(bHasSensor && m_sendSensorData) 
 			? PSMStreamFlags_includePositionData | PSMStreamFlags_includeCalibratedSensorData 
 			: PSMStreamFlags_includePositionData,
-			&start_stream_request_ids[i]);
+			&hmd_start_stream_request_ids[i]);
 	}
 }
 
