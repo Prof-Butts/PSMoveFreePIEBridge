@@ -15,6 +15,9 @@
 #include <stdio.h>
 #include "FreePIE.h"
 
+extern char g_sServerIP[128];
+extern char g_sServerPort[64];
+
 int   g_iHMDFreePIESlotIn = 0;
 int   g_iHMDFreePIESlotOut = 1;
 int   g_iContFreePIESlotOut = 2;
@@ -203,13 +206,15 @@ void FreepieMoveClient::handle_acquire_controller(PSMResult resultCode, PSMContr
 bool FreepieMoveClient::startup()
 {
 	bool success = true;
+	//char *PSMoveServiceHost = "localhost";
 
 	// Attempt to connect to the server
 	if (success)
 	{
-		if (PSM_InitializeAsync("localhost", "9512") == PSMResult_Error)
+		//if (PSM_InitializeAsync("localhost", "9512") == PSMResult_Error)
+		if (PSM_InitializeAsync(g_sServerIP, g_sServerPort) == PSMResult_Error)
 		{
-			std::cout << "FreepieMoveClient - Failed to initialize the client network manager" << std::endl;
+			std::cout << "FreepieMoveClient - Failed to connect to: " << g_sServerPort << std::endl;
 			success = false;
 		}
 	}

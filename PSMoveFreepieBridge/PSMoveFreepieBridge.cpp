@@ -6,35 +6,21 @@ extern int g_iHMDFreePIESlotIn, g_iHMDFreePIESlotOut, g_iContFreePIESlotOut;
 extern float g_fMultiplier;
 extern bool g_bDebug;
 
+// Parameters read from PSMoveFreepieBridge.cfg
+char g_sServerIP[128] = "localhost";
+char g_sServerPort[64] = "9512";
+
 void log_debug(const char *format, ...)
 {
 	static char buf[300];
 	static char out[300];
 
-#ifdef DEBUG_TO_FILE
-	if (g_DebugFile == NULL) {
-		try {
-			errno_t error = fopen_s(&g_DebugFile, "./cockpitlook.log", "wt");
-		}
-		catch (...) {
-			OutputDebugString("[DBG] [FreePIEBridge] Could not open cockpitlook.log");
-		}
-	}
-#endif
-
 	va_list args;
 	va_start(args, format);
 
 	vsprintf_s(buf, 300, format, args);
-	sprintf_s(out, 300, "[DBG] [FreePIEBridge] %s\n", buf);
+	sprintf_s(out, 300, "%s\n", buf);
 	printf(out);
-#ifdef DEBUG_TO_FILE
-	if (g_DebugFile != NULL) {
-		fprintf(g_DebugFile, "%s\n", buf);
-		fflush(g_DebugFile);
-	}
-#endif
-
 	va_end(args);
 }
 
@@ -99,6 +85,7 @@ void prompt_arguments(int32_t &hmdDeviceCount, int32_t &contDeviceCount,
 	std::cin >> g_bDebug;
 }
 
+#ifdef DISABLED
 bool parse_arguments(
     int argc, 
     char** argv, 
@@ -211,6 +198,101 @@ bool parse_arguments(
 
 	return bSuccess;
 }
+#endif
+
+bool LoadParams(int32_t &hmdDeviceCount, int32_t &contDeviceCount,
+	int* hmdDeviceIDs, int* contDeviceIDs,
+	PSMTrackingColorType* bulbColors, // PSMTrackingColorType* contBulbColors,
+	int32_t &contTriggerAxis)
+{
+	log_debug("Loading PSMoveFreepieBridge.cfg...");
+	FILE* file;
+	int error = 0, line = 0;
+
+	try {
+		error = fopen_s(&file, "./PSMoveFreepieBridge.cfg", "rt");
+	}
+	catch (...) {
+		log_debug("Could not load PSMoveFreepieBridge.cfg");
+	}
+
+	if (error != 0) {
+		log_debug("Error %d when loading PSMoveFreepieBridge.cfg", error);
+		return false;
+	}
+
+	int hmdDeviceID = 0, contDeviceID = 0, deviceID = 0;
+	hmdDeviceCount = 1;
+	contDeviceCount = 1;
+
+	PSMTrackingColorType bulbColor = PSMTrackingColorType_MaxColorTypes;
+	bulbColors[0] = bulbColor;
+
+	char buf[256], param[128], svalue[128];
+	int param_read_count = 0;
+	float fValue = 0.0f;
+
+	while (fgets(buf, 256, file) != NULL) {
+		line++;
+		// Skip comments and blank lines
+		if (buf[0] == ';' || buf[0] == '#')
+			continue;
+		if (strlen(buf) == 0)
+			continue;
+
+		if (sscanf_s(buf, "%s = %s", param, 128, svalue, 128) > 0) {
+			fValue = (float)atof(svalue);
+
+			if (_stricmp(param, "server_IP") == 0) {
+				strcpy_s(g_sServerIP, 128, svalue);
+			}
+			else if (_stricmp(param, "server_port") == 0) {
+				strcpy_s(g_sServerPort, 64, svalue);
+			}
+			else if (_stricmp(param, "HMD_ID") == 0) {
+				hmdDeviceID = (int)fValue;
+				hmdDeviceIDs[0] = hmdDeviceID;
+				hmdDeviceCount = hmdDeviceID > -1 ? 1 : 0;
+			}
+			else if (_stricmp(param, "controller_ID") == 0) {
+				contDeviceID = (int)fValue;
+				contDeviceIDs[0] = contDeviceID;
+				contDeviceCount = contDeviceID > -1 ? 1 : 0;
+			}
+			else if (_stricmp(param, "FreePIE_input_slot") == 0) {
+				g_iHMDFreePIESlotIn = (int)fValue;
+			}
+			else if (_stricmp(param, "FreePIE_output_slot") == 0) {
+				g_iHMDFreePIESlotOut = (int)fValue;
+			}
+			else if (_stricmp(param, "controller_output_slot") == 0) {
+				g_iContFreePIESlotOut = (int)fValue;
+				contTriggerAxis = -1;
+			}
+			else if (_stricmp(param, "debug_mode") == 0) {
+				g_bDebug = (int)fValue;
+			}
+		}
+	} // while ... read file
+	fclose(file);
+
+	// Print out the information read from the config file
+	log_debug("Server IP: %s", g_sServerIP);
+	log_debug("Server port: %s", g_sServerPort);
+	if (hmdDeviceCount > 0) {
+		log_debug("HMD ID: %d", hmdDeviceID);
+		log_debug("FreePIE yaw/pitch/roll input slot %d", g_iHMDFreePIESlotIn);
+		log_debug("FreePIE rotational + positional output slot %d", g_iHMDFreePIESlotOut);
+	}
+	
+	if (contDeviceCount > 0) {
+		log_debug("Controller ID: %d", contDeviceID);
+		log_debug("FreePIE controller positional output slot %d", g_iContFreePIESlotOut);
+	}
+	
+	log_debug("Debug mode: %d", g_bDebug);
+	return true;
+}
 
 int main(int argc, char** argv)
 {
@@ -228,8 +310,14 @@ int main(int argc, char** argv)
 
 	//if (argc == 1) {
 		//prompt_arguments(deviceType, deviceCount, deviceIDs, bulbColors, triggerAxis);
-		prompt_arguments(hmdDeviceCount, contDeviceCount, hmdDeviceIDs, contDeviceIDs,
-			bulbColors, contTriggerAxis);
+		//prompt_arguments(hmdDeviceCount, contDeviceCount, hmdDeviceIDs, contDeviceIDs,
+		//	bulbColors, contTriggerAxis);
+	bRun = LoadParams(hmdDeviceCount, contDeviceCount, hmdDeviceIDs, contDeviceIDs,
+		bulbColors, contTriggerAxis);
+
+	if (!bRun) {
+		std::cout << "Error loading config file, aborting" << std::endl;
+	}
 	/*}
 	else {
 		if (!parse_arguments(argc, argv, deviceType, deviceCount, deviceIDs, bulbColors, triggerAxis, bExitWithPSMoveService)) {
